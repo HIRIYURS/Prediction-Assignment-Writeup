@@ -1,0 +1,114 @@
+---
+title: 'Assignment: Prediction Assignment Writeup'
+author: "Santhosh Shankar"
+date: "January 29, 2016"
+output: html_document
+---
+#Objective
+The goal of this assignment is to predict the manner in which the training/test participants did their exercise. This is the "classe" variable in the training set. 
+
+#Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the [website][1]. (see the section on the Weight Lifting Exercise Dataset).
+
+#Data
+Data
+
+The training data for this project are available here, [training data][2]
+
+The test data are available here, [test data][3]
+
+The data for this project come from this [source][4]. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+```{r LoadingLibrariesAndData, echo = FALSE}
+# Load the required libraries
+require(caret)
+require(randomForest)
+
+# Load the training and test data
+training <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+testing <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+
+```
+The training data set contains 19622 observations. We will split this into training and validation data sets before applying our model to the Actual test data set.
+The Actual testing data set contains 20 observations.
+
+#Approach to our Analysis
+1. Our cross validation inludes dividing our training data into training and validation data sets (70%:30%) respectively
+2. Understand the dataset, columns of interest and the ones that can be omitted.
+4. Build a model using Random Forest
+5. Apply the model on to the testing data set
+
+###Cross validation (Split training data into 70:30)
+```{r crossvalidation, echo = FALSE}
+set.seed(2015)
+intrain <- createDataPartition(y=training$classe, p=.70 ,list=FALSE)
+mytraining <- training[intrain,]
+myvalidation <- training[-intrain,]
+```
+
+###Identify columns of interets and the ones that can be omitted
+Exclude the columns that are NA/Missing values for mor ethan 95% of the rows. Also, the columns name, window, timestamp are of little interest to be considered as predictors for classe
+
+```{r cleandata}
+dim(mytraining)
+dim(myvalidation)
+dim(testing)
+# Exclude columns 1:7, since they are of least interest to us
+mytraining <- mytraining[, -c(1:7)]
+myvalidation <- myvalidation[, -c(1:7)]
+testing <- testing[, -c(1:7)]
+
+# Exclude columns with all NA/Missing values
+mytraining <- mytraining[, colSums(is.na(mytraining)) == 0]
+myvalidation <- myvalidation[, colSums(is.na(myvalidation)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+
+dim(mytraining)
+dim(myvalidation)
+dim(testing)
+```
+With the above reduction we reduce the number of columns (of interest) to 86
+
+### Prediction Model using Random Forest
+```{r RF}
+model_RF <- randomForest(classe ~ ., data = mytraining, method = "class")
+
+# Predict it on validation data set
+pred_RF_validation <- predict(model_RF, myvalidation, type = "class")
+```
+
+
+### Verify it on Validation data set
+Let's find the outcome from the random forest model when applied on validation set.
+```{r Result}
+confusionMatrix(pred_RF_validation, myvalidation$classe)  
+```
+The accuracy of the model is 0.995. The expected out-of-sample error is estimated at 0.005, or 0.5%. The expected out-of-sample error is calculated as 1 - accuracy for predictions made against the cross-validation set. Our Test data set comprises 20 cases. With an accuracy above 99% on our cross-validation data, we can expect that very few, or none, of the test samples will be missclassified.
+
+
+### Predict on the Actual Test Data set
+```{r TestData}
+pred_RF_test <- predict(model_RF, testing, type = "class")
+
+pred_RF_test
+```
+
+### Submit files
+```{r submitfiles}
+# Write files for submission
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(pred_RF_test)
+```
+
+
+[1]: http://groupware.les.inf.puc-rio.br/har "website"
+[2]: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv "training data"
+[3]: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv "test data"
+[4]: http://groupware.les.inf.puc-rio.br/har "source"
